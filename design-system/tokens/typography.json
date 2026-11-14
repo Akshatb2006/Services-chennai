@@ -1,0 +1,29 @@
+{
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "sans": { "$value": ["Manrope", "Inter", "system-ui", "sans-serif"], "$description": "The only typeface — UI, headings and body on web and mobile." }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400, "$description": "Body copy" },
+      "medium": { "$value": 500, "$description": "UI labels, buttons, card titles" },
+      "semibold": { "$value": 600, "$description": "Headings and display" },
+      "bold": { "$value": 700, "$description": "Wordmark only" }
+    }
+  },
+  "type": {
+    "$description": "size/lineHeight in px; letterSpacing in em. Apps use sizeMobile for display styles.",
+    "display-xl": { "size": 84, "sizeMobile": 44, "lineHeight": 0.98, "letterSpacing": -0.045, "weight": 600 },
+    "display-lg": { "size": 56, "sizeMobile": 34, "lineHeight": 1.04, "letterSpacing": -0.04, "weight": 600 },
+    "display-md": { "size": 40, "sizeMobile": 28, "lineHeight": 1.08, "letterSpacing": -0.035, "weight": 600 },
+    "heading-lg": { "size": 28, "lineHeight": 1.15, "letterSpacing": -0.03, "weight": 600 },
+    "heading-md": { "size": 20, "lineHeight": 1.25, "letterSpacing": -0.02, "weight": 600 },
+    "heading-sm": { "size": 16, "lineHeight": 1.3, "letterSpacing": -0.01, "weight": 600 },
+    "body-lg": { "size": 18, "lineHeight": 1.55, "letterSpacing": -0.005, "weight": 400 },
+    "body-md": { "size": 15, "lineHeight": 1.55, "letterSpacing": 0, "weight": 400 },
+    "body-sm": { "size": 13, "lineHeight": 1.45, "letterSpacing": 0, "weight": 400 },
+    "label": { "size": 13, "lineHeight": 1.2, "letterSpacing": 0, "weight": 600, "$description": "Sentence case. No uppercase micro-labels." },
+    "button": { "size": 15, "lineHeight": 1, "letterSpacing": -0.005, "weight": 600 }
+  }
+}

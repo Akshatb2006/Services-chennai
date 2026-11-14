@@ -1,0 +1,35 @@
+{
+  "color": {
+    "$type": "color",
+    "brand": {
+      "ink": { "$value": "#171A17", "$description": "Carbon Ink. Primary text, dark sections, app headers, primary dark buttons." },
+      "ink-raised": { "$value": "#232723", "$description": "Raised surfaces on Carbon Ink (cards, inputs on dark)." },
+      "citrus": { "$value": "#D5F36A", "$description": "Electric Citrus. Signature accent: primary CTA fill, selected states, highlights. NEVER as text on light surfaces (1.1:1). Text on citrus is always ink (14:1)." },
+      "citrus-hover": { "$value": "#C9EC4E", "$description": "Hover / pressed citrus." },
+      "accent-ink": { "$value": "#5C6B16", "$description": "Citrus-family text colour for rare accents on light surfaces (5.3:1 on porcelain)." },
+      "olive": { "$value": "#92988A", "$description": "Soft Olive. Decorative details, dividers, icons on light. As TEXT only on ink (5.9:1)." },
+      "stone": { "$value": "#E8E5DA", "$description": "Warm Stone. Subtle fills: icon tiles, chips, image placeholders." }
+    },
+    "surface": {
+      "porcelain": { "$value": "#F5F3EC", "$description": "Primary page / screen background." },
+      "card": { "$value": "#FFFFFF", "$description": "Service cards, sheets, inputs, product surfaces." },
+      "stone": { "$value": "#E8E5DA", "$description": "Recessed areas and placeholders." }
+    },
+    "text": {
+      "primary": { "$value": "#171A17" },
+      "secondary": { "$value": "#5A5F54", "$description": "AA on porcelain (5.6), white (6.3) and stone (5.2)." },
+      "on-accent": { "$value": "#171A17", "$description": "Text/icons on citrus." },
+      "inverse": { "$value": "#FFFFFF" },
+      "inverse-secondary": { "$value": "#FFFFFFB3", "$description": "White at 70% for body text on ink." }
+    },
+    "border": {
+      "default": { "$value": "#E2DFD4" },
+      "strong": { "$value": "#CFCBBE" },
+      "inverse": { "$value": "#FFFFFF1F", "$description": "White at 12% for dividers on ink." }
+    },
+    "feedback": {
+      "success": { "$value": "#2F7A4A" },
+      "error": { "$value": "#B93A2B" }
+    }
+  }
+}

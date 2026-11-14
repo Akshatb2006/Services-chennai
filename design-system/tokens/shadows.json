@@ -1,0 +1,9 @@
+{
+  "shadow": {
+    "$type": "shadow",
+    "$description": "Use sparingly. Most separation comes from borders and surface colour, not shadow.",
+    "card": { "$value": { "offsetX": 0, "offsetY": 1, "blur": 2, "spread": 0, "color": "#171A170F" } },
+    "raised": { "$value": { "offsetX": 0, "offsetY": 16, "blur": 40, "spread": -16, "color": "#171A1729" } },
+    "overlay": { "$value": { "offsetX": 0, "offsetY": 30, "blur": 70, "spread": -20, "color": "#171A1766" } }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "radius": {
+    "$type": "dimension",
+    "$description": "Values in px. Cards and images lg, large media and sheets xl, buttons and chips pill.",
+    "xs": { "$value": 6 },
+    "sm": { "$value": 10 },
+    "md": { "$value": 14 },
+    "lg": { "$value": 18 },
+    "xl": { "$value": 24 },
+    "pill": { "$value": 999 }
+  }
+}

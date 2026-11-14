@@ -1,0 +1,14 @@
+{
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "fast": { "$value": 150, "$description": "ms — hover, press" },
+      "base": { "$value": 300, "$description": "ms — menus, toggles" },
+      "slow": { "$value": 600, "$description": "ms — section reveals" }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "standard": { "$value": [0.22, 1, 0.36, 1], "$description": "Soft ease-out used everywhere. No springs/bounce." }
+    }
+  }
+}
