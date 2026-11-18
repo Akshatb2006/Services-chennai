@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { serviceSlugs } from "@/config/service-slugs";
+import { serviceSlugs } from "@homecare/catalog";
 
 const known = new Set<string>(serviceSlugs);
 

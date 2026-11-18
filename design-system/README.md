@@ -6,7 +6,7 @@ The brand name is a placeholder. The visual system is final unless the tokens ch
 ```
 design-system/
   tokens/            ← SOURCE OF TRUTH (W3C design-token JSON, framework-independent)
-    colors.json  typography.json  spacing.json  radii.json  shadows.json  motion.json
+    colors.json  typography.json  spacing.json  radii.json  shadows.json  motion.json  components.json
   scripts/build.mjs  ← generates every platform output below
   dist/
     tokens.json      resolved values, no metadata (any platform)
@@ -15,6 +15,8 @@ design-system/
 ```
 
 The website's Tailwind theme (`website/src/styles/tokens.css`) is generated from the same JSON.
+The package is `@homecare/design-system` (`package.json`); the customer app reads it via `mobile-app/customer-app/src/theme/tokens.ts`.
+`components.json` holds shared component sizes (`size.*`) and interaction states (`state.*`).
 
 ```bash
 node design-system/scripts/build.mjs   # after editing any tokens/*.json

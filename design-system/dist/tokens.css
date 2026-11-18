@@ -58,6 +58,17 @@
   --hc-motion-duration-base: 300ms;
   --hc-motion-duration-slow: 600ms;
   --hc-motion-easing-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --hc-size-control-lg: 52px;
+  --hc-size-control-md: 44px;
+  --hc-size-control-sm: 36px;
+  --hc-size-icon-sm: 16px;
+  --hc-size-icon-md: 20px;
+  --hc-size-icon-lg: 24px;
+  --hc-size-tab-bar: 64px;
+  --hc-size-card-image-ratio: 1.333;
+  --hc-state-pressed-scale: 0.98;
+  --hc-state-pressed-overlay: 0.06;
+  --hc-state-disabled-opacity: 0.45;
   --hc-type-display-xl-size: 84px;
   --hc-type-display-xl-size-mobile: 44px;
   --hc-type-display-xl-line-height: 0.98;

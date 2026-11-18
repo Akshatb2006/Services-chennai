@@ -10,6 +10,7 @@
  *   design-system/dist/tokens.js     ESM object (JS/TS stacks, incl. React Native)
  *   design-system/dist/tokens.d.ts   Types for tokens.js
  *   website/src/styles/tokens.css    Tailwind v4 @theme mapping for the website
+ *   admin/src/styles/tokens.css      the same theme for the admin dashboard
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => JSON.parse(readFileSync(join(root, "tokens", f), "utf8"));
 
-const sources = ["colors", "typography", "spacing", "radii", "shadows", "motion"].map((f) => read(`${f}.json`));
+const sources = ["colors", "typography", "spacing", "radii", "shadows", "motion", "components"].map((f) => read(`${f}.json`));
 const all = Object.assign({}, ...sources);
 
 /** Strip $type/$description and unwrap $value. */
@@ -46,7 +47,7 @@ const walk = (obj, path) => {
       let val = v;
       if (Array.isArray(v)) val = p[0] === "motion" ? `cubic-bezier(${v.join(", ")})` : fontCss(v);
       else if (v && typeof v === "object") val = shadowCss(v);
-      else if (typeof v === "number" && ["space", "radius", "layout"].includes(p[0])) val = `${v}px`;
+      else if (typeof v === "number" && (["space", "radius", "layout"].includes(p[0]) || (p[0] === "size" && !p[1].includes("ratio")))) val = `${v}px`;
       else if (typeof v === "number" && p[0] === "motion" && p[1] === "duration") val = `${v}ms`;
       vars.push(`  --hc-${p.join("-")}: ${val};`);
     }
@@ -104,8 +105,12 @@ const tw = [
   `  --ease-standard: cubic-bezier(${tokens.motion.easing.standard.join(", ")});`,
   ...Object.entries(tokens.motion.duration).map(([k, v]) => `  --duration-${k}: ${v}ms;`),
 ];
-const websiteOut = join(root, "../website/src/styles/tokens.css");
-mkdirSync(dirname(websiteOut), { recursive: true });
-writeFileSync(websiteOut, `${header}@theme {\n${tw.join("\n")}\n}\n`);
+// Same Tailwind v4 theme for every Next.js app (website + admin dashboard).
+const tailwindTargets = ["../website/src/styles/tokens.css", "../admin/src/styles/tokens.css"];
+for (const target of tailwindTargets) {
+  const out = join(root, target);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, `${header}@theme {\n${tw.join("\n")}\n}\n`);
+}
 
-console.log(`✓ ${vars.length} tokens → dist/tokens.{css,json,js,d.ts} + website/src/styles/tokens.css`);
+console.log(`✓ ${vars.length} tokens → dist/tokens.{css,json,js,d.ts} + ${tailwindTargets.map((t) => t.slice(3)).join(" + ")}`);

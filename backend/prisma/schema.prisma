@@ -1,0 +1,546 @@
+// Homecare database schema (PostgreSQL). Migrations: prisma/migrations.
+// Enum values match @homecare/contracts exactly (e.g. RequestStatus).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  customer
+  staff
+  admin
+  professional
+}
+
+/// An authenticated account. The verified phone number is the identity.
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// E.164, e.g. +919840012345
+  phone       String    @unique @db.VarChar(16)
+  role        UserRole  @default(customer)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(3)
+
+  customer      Customer?
+  staff         StaffMember?
+  professional  Professional?
+  sessions      Session[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+/// One-time-password challenge. The code itself is never stored, only an HMAC of it.
+enum AuthAudience {
+  customer
+  staff
+  professional
+}
+
+model OtpChallenge {
+  id          String       @id @default(uuid()) @db.Uuid
+  phone       String       @db.VarChar(16)
+  /// Which sign-in flow issued the code: a customer code can't open an admin session and vice versa
+  purpose     AuthAudience @default(customer)
+  codeHash    String    @map("code_hash") @db.VarChar(64)
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(3)
+  /// Hash of the requesting IP (for abuse analysis without storing raw IPs)
+  ipHash      String?   @map("ip_hash") @db.VarChar(64)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([phone, purpose, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("otp_challenges")
+}
+
+/// A signed-in device. Refresh tokens are opaque, single-use and stored only as SHA-256 hashes.
+model Session {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String       @map("user_id") @db.Uuid
+  audience            AuthAudience @default(customer)
+  refreshTokenHash    String       @unique @map("refresh_token_hash") @db.VarChar(64)
+  /// Hash of the token this one replaced: presenting it again means the token was stolen → revoke.
+  previousRefreshHash String?   @map("previous_refresh_hash") @db.VarChar(64)
+  deviceName          String?   @map("device_name") @db.VarChar(80)
+  userAgent           String?   @map("user_agent") @db.VarChar(255)
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt           DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedReason       String?   @map("revoked_reason") @db.VarChar(40)
+  lastUsedAt          DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([previousRefreshHash])
+  @@map("sessions")
+}
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  fullName  String?  @map("full_name") @db.VarChar(80)
+  email     String?  @db.VarChar(254)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses Address[]
+  requests  ServiceRequest[]
+
+  @@map("customers")
+}
+
+enum AddressLabel {
+  home
+  work
+  other
+}
+
+model Address {
+  id         String       @id @default(uuid()) @db.Uuid
+  customerId String       @map("customer_id") @db.Uuid
+  label      AddressLabel
+  line1      String       @db.VarChar(200)
+  line2      String?      @db.VarChar(200)
+  landmark   String?      @db.VarChar(120)
+  city       String       @db.VarChar(60)
+  state      String       @db.VarChar(60)
+  pincode    String       @db.Char(6)
+  latitude   Float?
+  longitude  Float?
+  /// At most one default per customer (partial unique index in the migration).
+  isDefault  Boolean      @default(false) @map("is_default")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customer Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  requests ServiceRequest[]
+
+  @@index([customerId, createdAt])
+  @@map("addresses")
+}
+
+enum RequestStatus {
+  pending
+  confirmed
+  assigned
+  in_progress
+  completed
+  cancelled
+}
+
+enum PreferredTime {
+  morning
+  afternoon
+  evening
+  flexible
+}
+
+/// A customer's request for a service. "pending" = received, under review — not a booking.
+model ServiceRequest {
+  id              String        @id @default(uuid()) @db.Uuid
+  customerId      String        @map("customer_id") @db.Uuid
+  /// @homecare/catalog slug (validated by the API)
+  serviceSlug     String        @map("service_slug") @db.VarChar(64)
+  status          RequestStatus @default(pending)
+  details         String        @db.VarChar(1000)
+  preferredDate   DateTime      @map("preferred_date") @db.Date
+  preferredTime   PreferredTime @map("preferred_time")
+  /// Live link to the saved address (nulled if the address is deleted)
+  addressId       String?       @map("address_id") @db.Uuid
+  /// Address as sent, so history stays accurate after edits/deletion
+  addressSnapshot Json          @map("address_snapshot")
+  cancelReason    String?       @map("cancel_reason") @db.VarChar(300)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  address     Address?       @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  events      RequestEvent[]
+  assignments Assignment[]
+  alerts      OperationsAlert[]
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@index([serviceSlug, createdAt])
+  @@index([preferredDate])
+  @@map("service_requests")
+}
+
+enum EventActor {
+  customer
+  staff
+  system
+  professional
+}
+
+/// Append-only status history of a request.
+model RequestEvent {
+  id          String         @id @default(uuid()) @db.Uuid
+  requestId   String         @map("request_id") @db.Uuid
+  fromStatus  RequestStatus? @map("from_status")
+  toStatus    RequestStatus  @map("to_status")
+  actor       EventActor
+  actorUserId String?        @map("actor_user_id") @db.Uuid
+  /// Set when a staff member made the change
+  actorStaffId String?       @map("actor_staff_id") @db.Uuid
+  /// Set when the assigned professional made the change (start/complete)
+  actorProfessionalId String? @map("actor_professional_id") @db.Uuid
+  note        String?        @db.VarChar(300)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  request           ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorStaff        StaffMember?   @relation(fields: [actorStaffId], references: [id], onDelete: Restrict)
+  actorProfessional Professional?  @relation(fields: [actorProfessionalId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, createdAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("request_events")
+}
+
+/// Customer notification. The row is the in-app copy; per-channel delivery is tracked in NotificationDelivery.
+enum NotificationAudience {
+  customer
+  professional
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Which app shows it (one person can be both a customer and a professional)
+  audience  NotificationAudience @default(customer)
+  type      String    @db.VarChar(40)
+  title     String    @db.VarChar(120)
+  body      String    @db.VarChar(400)
+  /// Related request, if any
+  requestId String?   @map("request_id") @db.Uuid
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, audience, createdAt(sort: Desc)])
+  @@index([requestId])
+  @@map("notifications")
+}
+
+// ─── Milestone 3: operations ────────────────────────────────────────────────
+
+enum StaffRole {
+  super_admin
+  operations_admin
+  operations_staff
+  support_staff
+}
+
+enum StaffStatus {
+  active
+  disabled
+}
+
+/// A member of the Homecare team with dashboard access. Signs in with phone OTP (staff audience).
+model StaffMember {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @unique @map("user_id") @db.Uuid
+  fullName    String      @map("full_name") @db.VarChar(80)
+  role        StaffRole
+  status      StaffStatus @default(active)
+  createdById String?     @map("created_by_id") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  resolvedAlerts OperationsAlert[]
+  auditLogs      AuditLog[]
+  events      RequestEvent[]
+  assignments Assignment[]
+
+  @@map("staff_members")
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+}
+
+enum AccountStatus {
+  active
+  suspended
+  inactive
+}
+
+enum AvailabilityStatus {
+  available
+  unavailable
+}
+
+enum TimeSlot {
+  morning
+  afternoon
+  evening
+}
+
+/// A service professional managed by operations (no app login this milestone).
+model Professional {
+  id                 String             @id @default(uuid()) @db.Uuid
+  /// Linked app account (set when the professional signs in to the Homecare Pro app with this phone)
+  userId             String?            @unique @map("user_id") @db.Uuid
+  fullName           String             @map("full_name") @db.VarChar(80)
+  /// E.164
+  phone              String             @unique @db.VarChar(16)
+  verificationStatus VerificationStatus @default(pending) @map("verification_status")
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(3)
+  verifiedById       String?            @map("verified_by_id") @db.Uuid
+  accountStatus      AccountStatus      @default(active) @map("account_status")
+  availabilityStatus AvailabilityStatus @default(available) @map("availability_status")
+  notes              String?            @db.VarChar(500)
+  /// Registration date
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User?                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  categories   ProfessionalCategory[]
+  areas        ProfessionalServiceArea[]
+  availability ProfessionalAvailability[]
+  assignments  Assignment[]
+  documents    ProfessionalDocument[]
+  events       RequestEvent[]
+  auditLogs    AuditLog[]
+  alerts       OperationsAlert[]
+
+  @@index([verificationStatus, accountStatus])
+  @@map("professionals")
+}
+
+/// Service categories a professional offers (@homecare/catalog category ids).
+model ProfessionalCategory {
+  professionalId String @map("professional_id") @db.Uuid
+  category       String @db.VarChar(40)
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, category])
+  @@index([category])
+  @@map("professional_categories")
+}
+
+/// Pincodes a professional serves (entered by staff).
+model ProfessionalServiceArea {
+  professionalId String @map("professional_id") @db.Uuid
+  pincode        String @db.Char(6)
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, pincode])
+  @@index([pincode])
+  @@map("professional_service_areas")
+}
+
+/// Weekly working pattern: the weekday/slot combinations a professional takes work.
+model ProfessionalAvailability {
+  professionalId String   @map("professional_id") @db.Uuid
+  /// 0 = Sunday … 6 = Saturday
+  weekday        Int      @db.SmallInt
+  slot           TimeSlot
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, weekday, slot])
+  @@map("professional_availability")
+}
+
+/// Metadata for verification documents. File bytes live in external storage (DocumentStorage); never in the database.
+model ProfessionalDocument {
+  id             String   @id @default(uuid()) @db.Uuid
+  professionalId String   @map("professional_id") @db.Uuid
+  kind           String   @db.VarChar(40)
+  storageKey     String   @map("storage_key") @db.VarChar(255)
+  uploadedById   String?  @map("uploaded_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@map("professional_documents")
+}
+
+enum AssignmentStatus {
+  active
+  replaced
+  cancelled
+  completed
+}
+
+/// A professional allocated to a request for a date + slot. Rows are never deleted: reassignment ends the
+/// previous row (replaced) and creates a new one, so this table is the assignment history.
+/// Partial unique indexes (migration) enforce: one active assignment per request, and no professional
+/// double-booked for the same date + slot.
+model Assignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  requestId      String           @map("request_id") @db.Uuid
+  professionalId String           @map("professional_id") @db.Uuid
+  scheduledDate  DateTime         @map("scheduled_date") @db.Date
+  slot           TimeSlot
+  status         AssignmentStatus @default(active)
+  assignedById   String           @map("assigned_by_id") @db.Uuid
+  note           String?          @db.VarChar(300)
+  /// When the professional acknowledged the assignment in the app (informational; not a status change)
+  acknowledgedAt DateTime?        @map("acknowledged_at") @db.Timestamptz(3)
+  endReason      String?          @map("end_reason") @db.VarChar(300)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  endedAt        DateTime?        @map("ended_at") @db.Timestamptz(3)
+
+  request       ServiceRequest      @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  professional  Professional        @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  assignedBy    StaffMember         @relation(fields: [assignedById], references: [id], onDelete: Restrict)
+  scheduledJobs ScheduledJob[]
+  alerts        OperationsAlert[]
+
+  @@index([requestId, createdAt])
+  @@index([professionalId, scheduledDate])
+  @@map("assignments")
+}
+
+/// Append-only record of administrative actions (UPDATE/DELETE blocked by a trigger).
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorStaffId String?  @map("actor_staff_id") @db.Uuid
+  /// Set for actions taken by a professional in the Pro app
+  actorProfessionalId String? @map("actor_professional_id") @db.Uuid
+  action       String   @db.VarChar(60)
+  resourceType String   @map("resource_type") @db.VarChar(40)
+  resourceId   String   @map("resource_id") @db.VarChar(64)
+  /// Context only — never OTPs, tokens or secrets
+  metadata     Json     @default("{}")
+  ipHash       String?  @map("ip_hash") @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor             StaffMember?  @relation(fields: [actorStaffId], references: [id], onDelete: Restrict)
+  actorProfessional Professional? @relation(fields: [actorProfessionalId], references: [id], onDelete: Restrict)
+
+  @@index([resourceType, resourceId, createdAt])
+  @@index([createdAt(sort: Desc)])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+/// Operational switch per catalogue service. Canonical ids/copy stay in @homecare/catalog; a missing row = enabled.
+model ServiceSetting {
+  slug        String   @id @db.VarChar(64)
+  enabled     Boolean  @default(true)
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("service_settings")
+}
+
+enum NotificationChannel {
+  in_app
+  push
+  sms
+}
+
+enum DeliveryStatus {
+  available
+  queued
+  sent
+  failed
+  skipped
+}
+
+/// Per-channel delivery state. "skipped" = no provider configured; never reported as delivered.
+model NotificationDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  notificationId String              @map("notification_id") @db.Uuid
+  channel        NotificationChannel
+  status         DeliveryStatus
+  provider       String?             @db.VarChar(40)
+  detail         String?             @db.VarChar(300)
+  attempts       Int                 @default(0)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@map("notification_deliveries")
+}
+
+// ─── Milestone 5: reliability ───────────────────────────────────────────────
+
+enum ScheduledJobStatus {
+  pending
+  processing
+  sent
+  skipped
+  failed
+}
+
+/// Durable background job (PostgreSQL-backed; no extra infrastructure). Workers claim due rows with
+/// FOR UPDATE SKIP LOCKED, so any number of API instances can run the scheduler without double work.
+/// `dedupeKey` makes each logical job exist once (e.g. one day-before reminder per assignment + date).
+model ScheduledJob {
+  id             String             @id @default(uuid()) @db.Uuid
+  kind           String             @db.VarChar(40)
+  dedupeKey      String             @unique @map("dedupe_key") @db.VarChar(160)
+  assignmentId   String?            @map("assignment_id") @db.Uuid
+  runAt          DateTime           @map("run_at") @db.Timestamptz(3)
+  status         ScheduledJobStatus @default(pending)
+  attempts       Int                @default(0)
+  maxAttempts    Int                @default(5) @map("max_attempts")
+  lockedBy       String?            @map("locked_by") @db.VarChar(80)
+  lockedUntil    DateTime?          @map("locked_until") @db.Timestamptz(3)
+  lastError      String?            @map("last_error") @db.VarChar(500)
+  /// Why it was skipped / what it produced
+  outcome        String?            @db.VarChar(200)
+  notificationId String?            @map("notification_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+
+  @@index([status, runAt])
+  @@index([assignmentId])
+  @@map("scheduled_jobs")
+}
+
+enum AlertStatus {
+  open
+  resolved
+}
+
+/// Something operations must act on, e.g. a booking whose professional was suspended.
+/// Resolved only by an explicit action (reassign, cancel, or reactivating the professional).
+model OperationsAlert {
+  id             String      @id @default(uuid()) @db.Uuid
+  kind           String      @db.VarChar(60)
+  status         AlertStatus @default(open)
+  professionalId String      @map("professional_id") @db.Uuid
+  requestId      String      @map("request_id") @db.Uuid
+  assignmentId   String      @map("assignment_id") @db.Uuid
+  message        String      @db.VarChar(300)
+  resolution     String?     @db.VarChar(60)
+  resolvedById   String?     @map("resolved_by_id") @db.Uuid
+  resolvedAt     DateTime?   @map("resolved_at") @db.Timestamptz(3)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  professional Professional   @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  request      ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  assignment   Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  resolvedBy   StaffMember?   @relation(fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([requestId])
+  @@map("operations_alerts")
+}

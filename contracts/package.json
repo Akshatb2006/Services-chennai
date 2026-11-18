@@ -1,0 +1,12 @@
+{
+  "name": "@homecare/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "API contract shared by the Homecare backend and apps: Zod request schemas, response types, request statuses, phone rules.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "peerDependencies": { "zod": "^4.2.0" },
+  "sideEffects": false
+}

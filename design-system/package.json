@@ -1,0 +1,15 @@
+{
+  "name": "@homecare/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Homecare design tokens (W3C DTCG JSON) and generated platform outputs.",
+  "main": "dist/tokens.js",
+  "types": "dist/tokens.d.ts",
+  "exports": {
+    ".": { "types": "./dist/tokens.d.ts", "default": "./dist/tokens.js" },
+    "./tokens.json": "./dist/tokens.json",
+    "./tokens.css": "./dist/tokens.css"
+  },
+  "scripts": { "build": "node scripts/build.mjs" },
+  "sideEffects": false
+}

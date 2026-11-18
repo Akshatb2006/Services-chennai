@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@homecare/catalog": ["../catalog/src/index.ts"]
     }
   },
   "include": [

@@ -179,5 +179,20 @@ export declare const tokens: {
       "standard": readonly number[];
     };
   };
+  "size": {
+    "control-lg": number;
+    "control-md": number;
+    "control-sm": number;
+    "icon-sm": number;
+    "icon-md": number;
+    "icon-lg": number;
+    "tab-bar": number;
+    "card-image-ratio": number;
+  };
+  "state": {
+    "pressed-scale": number;
+    "pressed-overlay": number;
+    "disabled-opacity": number;
+  };
 };
 export default tokens;

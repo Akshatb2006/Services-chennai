@@ -1,0 +1,22 @@
+# Local development database only. Credentials here are for localhost use and are not secrets.
+services:
+  postgres:
+    image: postgres:17
+    container_name: homecare-postgres
+    environment:
+      POSTGRES_USER: homecare
+      POSTGRES_PASSWORD: homecare_dev
+      POSTGRES_DB: homecare
+    ports:
+      - "5433:5432"
+    volumes:
+      - homecare-pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homecare -d homecare"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  homecare-pgdata:

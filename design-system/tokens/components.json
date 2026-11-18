@@ -1,0 +1,21 @@
+{
+  "size": {
+    "$type": "dimension",
+    "$description": "Component dimensions in px, shared by web and mobile. Never go below layout.touch-target-min for anything tappable.",
+    "control-lg": { "$value": 52, "$description": "Primary/secondary buttons, large search fields" },
+    "control-md": { "$value": 44, "$description": "Inputs, compact buttons, icon buttons" },
+    "control-sm": { "$value": 36, "$description": "Chips and filters (pad hit area to 44)" },
+    "icon-sm": { "$value": 16 },
+    "icon-md": { "$value": 20 },
+    "icon-lg": { "$value": 24 },
+    "tab-bar": { "$value": 64, "$description": "Mobile bottom navigation height, excluding safe-area inset" },
+    "card-image-ratio": { "$value": 1.333, "$description": "Service card image aspect ratio (4:3)" }
+  },
+  "state": {
+    "$type": "number",
+    "$description": "Interaction states. Pressed citrus uses color.brand.citrus-hover; pressed ink uses color.brand.ink-raised.",
+    "pressed-scale": { "$value": 0.98, "$description": "Press-in scale for buttons and cards" },
+    "pressed-overlay": { "$value": 0.06, "$description": "Ink overlay opacity on pressed light surfaces" },
+    "disabled-opacity": { "$value": 0.45 }
+  }
+}

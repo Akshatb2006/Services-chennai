@@ -1,0 +1,163 @@
+# Homecare CI: checks only. It never deploys, never publishes an app, never touches a real database
+# and uses no repository secrets. Every database below is a disposable service container.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NPM_CONFIG_FUND: "false"
+  NPM_CONFIG_AUDIT: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  backend:
+    name: Backend (Prisma, typecheck, lint, unit + PostgreSQL integration tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # Throwaway credentials for a service container that only exists for this job.
+          POSTGRES_USER: homecare_ci
+          POSTGRES_PASSWORD: homecare_ci
+          POSTGRES_DB: homecare_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U homecare_ci -d homecare_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://homecare_ci:homecare_ci@localhost:5432/homecare_test?schema=public
+      TEST_DATABASE_URL: postgresql://homecare_ci:homecare_ci@localhost:5432/homecare_test?schema=public
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the migration-immutability check compares against the base branch
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Prisma schema is valid
+        run: npx prisma validate
+      - name: Committed migrations are not edited, renamed or deleted
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only --diff-filter=MDR "origin/${{ github.base_ref }}...HEAD" -- prisma/migrations)
+          if [ -n "$changed" ]; then
+            echo "::error::Applied migrations must never change. Add a new migration instead:"; echo "$changed"; exit 1
+          fi
+      - name: Migrations apply cleanly to an empty database
+        run: npx prisma migrate deploy && npx prisma migrate status
+      - name: Schema and migrations are in sync (no missing migration)
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Integration tests (PostgreSQL)
+        run: npm run test:e2e
+      - run: npm run build
+
+  api-image:
+    name: API Docker image (build + disposable smoke test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build runtime and migrate images (not pushed)
+        run: |
+          docker build -f backend/Dockerfile -t homecare-api:ci .
+          docker build -f backend/Dockerfile --target migrate -t homecare-api-migrate:ci .
+      - name: Smoke test against a disposable TLS PostgreSQL
+        run: backend/scripts/docker-smoke.sh homecare-api:ci homecare-api-migrate:ci
+
+  admin:
+    name: Admin dashboard (typecheck, lint, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+  website:
+    name: Website (typecheck, lint, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx next typegen && npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+
+  mobile:
+    name: ${{ matrix.app }} (tests, typecheck, lint, iOS + Android export)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [customer-app, professional-app]
+    defaults:
+      run:
+        working-directory: mobile-app/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: mobile-app/${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Tests
+        run: npx jest --ci
+      - name: Export iOS and Android bundles
+        run: npx expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/expo-export"

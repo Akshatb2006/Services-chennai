@@ -1,0 +1,19 @@
+# Allowlist for `docker build -f backend/Dockerfile .` (repository-root context).
+# Only the API and the two shared packages it bundles are sent to the builder.
+*
+!backend/
+!catalog/
+!contracts/
+
+# Never send local state, build output or secrets.
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+backend/dist
+backend/coverage
+backend/src/generated
+backend/test
+backend/docker
+backend/*.tsbuildinfo
+**/.DS_Store
